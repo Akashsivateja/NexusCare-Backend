@@ -265,10 +265,6 @@ router.get("/patient/:patientId/summary", async (req, res) => {
       "Based on this, provide a concise summary of the patient's health status, key health events, and any notable observations. Focus on clinically relevant information.";
 
     // --- MISTRAL LLM API Call Placeholder ---
-    // You'll need to set up your Mistral API key in your .env file
-    // and potentially install 'node-fetch' if not already available
-    // npm install node-fetch (if using older Node.js or not in a module environment)
-
     const mistralApiKey = process.env.MISTRAL_API_KEY;
     if (!mistralApiKey) {
       return res
@@ -276,7 +272,7 @@ router.get("/patient/:patientId/summary", async (req, res) => {
         .json({ error: "Mistral API Key not configured on server." });
     }
 
-    const mistralApiUrl = "https://api.mistral.ai/v1/chat/completions"; // Check Mistral's current API endpoint
+    const mistralApiUrl = "https://api.mistral.ai/v1/chat/completions";
 
     const mistralResponse = await fetch(mistralApiUrl, {
       method: "POST",
@@ -285,7 +281,8 @@ router.get("/patient/:patientId/summary", async (req, res) => {
         Authorization: `Bearer ${mistralApiKey}`,
       },
       body: JSON.stringify({
-        model: "mistral-tiny", // Or "mistral-medium", "mistral-large" depending on your needs and budget
+        // THIS IS THE ONLY LINE THAT NEEDS TO CHANGE HERE
+        model: "open-mistral-7b", // Changed to the free/lowest-cost model
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
         max_tokens: 500, // Limit the summary length
