@@ -1,17 +1,16 @@
 /* START OF FILE routes/doctorRoutes.js */
 
 const express = require("express");
-const AWS = require("aws-sdk"); // For S3 summary, though not directly used for summary generation here
+const AWS = require("aws-sdk");
 const auth = require("../middleware/authMiddleware");
 const User = require("../models/User");
 const Record = require("../models/Record");
 const File = require("../models/File");
 const Note = require("../models/Note");
-const Prescription = require("../models/Prescription"); // New: Prescription model
+const Prescription = require("../models/Prescription");
 const router = express.Router();
 
-// --- Middleware to ensure only doctors can access these routes ---
-router.use(auth); // Apply general authentication first
+router.use(auth);
 router.use((req, res, next) => {
   if (req.user.role !== "doctor") {
     return res.status(403).json({ error: "Access denied. Doctors only." });
@@ -19,13 +18,11 @@ router.use((req, res, next) => {
   next();
 });
 
-// --- Helper function to check if a doctor is consulting a patient ---
 async function isDoctorConsultingPatient(doctorId, patientId) {
   const doctor = await User.findById(doctorId);
   return doctor && doctor.consultedPatients.includes(patientId);
 }
 
-// ✅ Doctor gets a list of their consulted patients
 router.get("/my-patients", async (req, res) => {
   const { search } = req.query;
   try {
@@ -35,17 +32,13 @@ router.get("/my-patients", async (req, res) => {
     if (!doctor) {
       return res.status(404).json({ error: "Doctor not found." });
     }
-
     let query = { _id: { $in: doctor.consultedPatients } };
-
     if (search) {
-      // Add search criteria for name or email
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
       ];
     }
-
     const patients = await User.find(query).select("-password -__v");
     res.json(patients);
   } catch (error) {
@@ -54,7 +47,6 @@ router.get("/my-patients", async (req, res) => {
   }
 });
 
-// ✅ Get a specific patient's vitals (Doctor can only see consulted patients)
 router.get("/patient/:patientId/vitals", async (req, res) => {
   const { patientId } = req.params;
   if (!(await isDoctorConsultingPatient(req.user.userId, patientId))) {
@@ -73,7 +65,6 @@ router.get("/patient/:patientId/vitals", async (req, res) => {
   }
 });
 
-// ✅ Get a specific patient's files (Doctor can only see consulted patients)
 router.get("/patient/:patientId/files", async (req, res) => {
   const { patientId } = req.params;
   if (!(await isDoctorConsultingPatient(req.user.userId, patientId))) {
@@ -92,7 +83,6 @@ router.get("/patient/:patientId/files", async (req, res) => {
   }
 });
 
-// ✅ Add a note for a patient (Doctor can only add notes for consulted patients)
 router.post("/patient/:patientId/notes", async (req, res) => {
   const { patientId } = req.params;
   const { content } = req.body;
@@ -119,38 +109,29 @@ router.post("/patient/:patientId/notes", async (req, res) => {
   }
 });
 
-// ✅ Get notes for a patient (Doctor can only view notes for consulted patients, patients can view their own)
-router.get("/patient/:patientId/notes", auth, async (req, res) => {
+router.get("/patient/:patientId/notes", async (req, res) => {
   const { patientId } = req.params;
 
-  // A patient can view their own notes
-  if (req.user.role === "patient" && req.user.userId === patientId) {
-    // Continue to fetch notes
-  }
-  // A doctor can view notes if they are consulting the patient
-  else if (
+  if (
     req.user.role === "doctor" &&
     (await isDoctorConsultingPatient(req.user.userId, patientId))
   ) {
-    // Continue to fetch notes
+    try {
+      const notes = await Note.find({ patientId })
+        .sort({ createdAt: -1 })
+        .populate("doctorId", "name email");
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching patient notes:", error);
+      res.status(500).json({ error: "Failed to fetch patient notes." });
+    }
   } else {
     return res
       .status(403)
       .json({ error: "Access denied. Not authorized to view these notes." });
   }
-
-  try {
-    const notes = await Note.find({ patientId })
-      .sort({ createdAt: -1 })
-      .populate("doctorId", "name email"); // Populate doctor's name and email
-    res.json(notes);
-  } catch (error) {
-    console.error("Error fetching patient notes:", error);
-    res.status(500).json({ error: "Failed to fetch patient notes." });
-  }
 });
 
-// ✅ Doctor creates a prescription for a patient
 router.post("/patient/:patientId/prescriptions", async (req, res) => {
   const { patientId } = req.params;
   const { medications, instructions } = req.body;
@@ -182,27 +163,6 @@ router.post("/patient/:patientId/prescriptions", async (req, res) => {
   }
 });
 
-// ✅ Patient views their prescriptions
-router.get("/my-prescriptions", async (req, res) => {
-  if (req.user.role !== "patient") {
-    return res
-      .status(403)
-      .json({ error: "Only patients can view their prescriptions." });
-  }
-  try {
-    const prescriptions = await Prescription.find({
-      patientId: req.user.userId,
-    })
-      .sort({ createdAt: -1 })
-      .populate("doctorId", "name email"); // Populate doctor info
-    res.json(prescriptions);
-  } catch (error) {
-    console.error("Error fetching patient prescriptions:", error);
-    res.status(500).json({ error: "Failed to fetch your prescriptions." });
-  }
-});
-
-// ✅ Doctor gets a summarized health record for a patient (using LLM - Mistral placeholder)
 router.get("/patient/:patientId/summary", async (req, res) => {
   const { patientId } = req.params;
   if (!(await isDoctorConsultingPatient(req.user.userId, patientId))) {
@@ -212,7 +172,6 @@ router.get("/patient/:patientId/summary", async (req, res) => {
   }
 
   try {
-    // Fetch all relevant data for the patient
     const patient = await User.findById(patientId).select("name email role");
     const vitals = await Record.find({ userId: patientId }).sort({
       createdAt: 1,
@@ -226,7 +185,6 @@ router.get("/patient/:patientId/summary", async (req, res) => {
       return res.status(404).json({ error: "Patient not found." });
     }
 
-    // Format data for LLM input
     let prompt = `Generate a concise health summary for the patient '${patient.name}' (Email: ${patient.email}).\n\n`;
     prompt +=
       "Include current and past health conditions based on the provided data. Highlight any significant trends or concerns.\n\n";
@@ -264,60 +222,71 @@ router.get("/patient/:patientId/summary", async (req, res) => {
     prompt +=
       "Based on this, provide a concise summary of the patient's health status, key health events, and any notable observations. Focus on clinically relevant information.";
 
-    // --- MISTRAL LLM API Call Placeholder ---
     const mistralApiKey = process.env.MISTRAL_API_KEY;
+
+    console.log("Mistral API Key Check:", mistralApiKey ? "Key found" : "Key NOT found (undefined)");
+
     if (!mistralApiKey) {
       return res
         .status(500)
         .json({ error: "Mistral API Key not configured on server." });
     }
 
+    // ✅ Crucial Fix: Ensure this URL is exactly correct
     const mistralApiUrl = "https://api.mistral.ai/v1/chat/completions";
 
-    const mistralResponse = await fetch(mistralApiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${mistralApiKey}`,
-      },
-      body: JSON.stringify({
-        // THIS IS THE ONLY LINE THAT NEEDS TO CHANGE HERE
-        model: "open-mistral-7b", // Changed to the free/lowest-cost model
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        max_tokens: 500, // Limit the summary length
-      }),
-    });
+    console.log("Sending prompt to Mistral AI:", prompt.substring(0, 500) + "...");
 
-    const mistralData = await mistralResponse.json();
+    try { // Added try-catch around the fetch call for better error handling
+        const mistralResponse = await fetch(mistralApiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mistralApiKey}`,
+          },
+          body: JSON.stringify({
+            model: "open-mistral-7b",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7,
+            max_tokens: 500,
+          }),
+        });
 
-    if (
-      mistralResponse.ok &&
-      mistralData.choices &&
-      mistralData.choices.length > 0
-    ) {
-      const summary = mistralData.choices[0].message.content;
-      res.json({ summary });
-    } else {
-      console.error("Mistral API error:", mistralData);
-      res
-        .status(500)
-        .json({
-          error: mistralData.error
-            ? mistralData.error.message
-            : "Failed to generate summary from AI.",
+        console.log("Mistral raw response status:", mistralResponse.status, mistralResponse.statusText);
+
+        const mistralData = await mistralResponse.json();
+
+        console.log("Mistral full response data:", JSON.stringify(mistralData, null, 2));
+
+        if (
+          mistralResponse.ok &&
+          mistralData.choices &&
+          mistralData.choices.length > 0
+        ) {
+          const summary = mistralData.choices[0].message.content;
+          res.json({ summary });
+        } else {
+          // This console.error is what you need to check in Render logs
+          console.error("Mistral API error (from Mistral response):", mistralData);
+          res.status(500).json({
+            error: mistralData.error
+              ? mistralData.error.message
+              : "Failed to generate summary from AI (unexpected response).",
+          });
+        }
+    } catch (fetchError) { // Catch network errors during the fetch itself
+        console.error("Error during fetch to Mistral API:", fetchError);
+        res.status(500).json({
+            error: "Network error when connecting to Mistral AI. Please check URL or network.",
         });
     }
   } catch (error) {
-    console.error("Error generating health summary:", error);
-    res
-      .status(500)
-      .json({
-        error: "Failed to generate health summary due to server error.",
-      });
+    console.error("Error generating health summary (main catch block):", error);
+    res.status(500).json({
+      error: "Failed to generate health summary due to server error.",
+    });
   }
 });
 
 module.exports = router;
-
 /* END OF FILE routes/doctorRoutes.js */
