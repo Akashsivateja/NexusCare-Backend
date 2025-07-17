@@ -18,7 +18,7 @@ const app = express();
 // ✅ Configure CORS to allow your frontend URL
 app.use(
   cors({
-    origin: "https://cloudvault-frontend.onrender.com", // 🔁 Replace with your actual frontend URL
+    origin: "https://nexuscare-frontend.onrender.com", // 🔁 Replace with your actual frontend URL
     credentials: true,
   })
 );
