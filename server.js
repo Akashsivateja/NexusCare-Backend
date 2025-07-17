@@ -10,7 +10,8 @@ const authRoutes = require("./routes/authRoutes");
 const recordRoutes = require("./routes/recordRoutes");
 const fileRoutes = require("./routes/fileRoutes");
 const doctorRoutes = require("./routes/doctorRoutes");
-const consultationRoutes = require("./routes/consultationRoutes"); // ✅ New: Import consultation routes
+const consultationRoutes = require("./routes/consultationRoutes");
+const patientRoutes = require("./routes/patientRoutes"); // ✅ NEW: Import patient routes
 
 dotenv.config();
 const app = express();
@@ -18,7 +19,7 @@ const app = express();
 // ✅ Configure CORS to allow your frontend URL
 app.use(
   cors({
-    origin: "https://nexuscare-frontend.onrender.com", // 🔁 Replace with your actual frontend URL
+    origin: "https://cloudvault-frontend.onrender.com", // 🔁 Verify this URL matches your deployed Render FRONTEND URL
     credentials: true,
   })
 );
@@ -29,7 +30,7 @@ app.use(fileUpload({ useTempFiles: true }));
 
 // ✅ Connect to MongoDB
 mongoose
-  .connect(process.env.MONGODB_URL, {
+  .connect(process.env.MONGO_URI, { // Make sure this matches your Render environment variable name
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
@@ -41,10 +42,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/records", recordRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/doctor", doctorRoutes);
-app.use("/api/consultations", consultationRoutes); // ✅ New: Add consultation routes
+app.use("/api/consultations", consultationRoutes);
+app.use("/api/patients", patientRoutes); // ✅ NEW: Add patient routes to the app
 
 // ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
 });
+/* END OF FILE server.js */
